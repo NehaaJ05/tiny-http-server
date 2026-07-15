@@ -1,0 +1,14 @@
+# Executables
+server
+
+# Object files
+*.o
+
+# VS Code
+.vscode/
+
+# Build output
+build/
+
+# macOS
+.DS_Store
