@@ -1,11 +1,17 @@
 #include "server.h"
 #include "response.h"
+#include "request.h"
+
 #include <iostream>
 #include <cstring>
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+
+#include <fstream>
+#include <sstream>
 
 Server::Server(int port)
 {
@@ -66,24 +72,112 @@ void Server::acceptConnections(){
                       << std::endl;
             continue;
         }
-        
-        std::cout << "Client connected from "
-                  << inet_ntoa(clientAddress.sin_addr)
-                  << ":"
-                  << ntohs(clientAddress.sin_port)
-                  << std::endl;
-        
-        HttpResponse response(
-            200,
-            "OK",
-            "text/plain",
-            "Hello from Tiny HTTP Server!"
-        );
-        std::string httpResponse = response.build();
-        send(clientSocket,httpResponse.c_str(),httpResponse.length(),0);
-        close(clientSocket);
-
-        std::cout << "Connection closed. Goodbye"
-                  << std::endl;
+        handleClient(clientSocket, clientAddress);
     }
+}
+
+void Server::handleClient(int clientSocket,
+                          const sockaddr_in& clientAddress)
+{
+    std::cout << "Client connected from "
+              << inet_ntoa(clientAddress.sin_addr)
+              << ":"
+              << ntohs(clientAddress.sin_port)
+              << std::endl;
+
+    constexpr size_t BUFFER_SIZE = 4096;
+
+    char buffer[BUFFER_SIZE];
+
+    ssize_t bytesReceived =
+        recv(clientSocket,
+             buffer,
+             BUFFER_SIZE - 1,
+             0);
+
+    if (bytesReceived <= 0)
+    {
+        close(clientSocket);
+        return;
+    }
+
+    buffer[bytesReceived] = '\0';
+
+    HttpRequest request(buffer);
+
+    std::cout << "\n======= Incoming Request =======\n";
+
+    std::cout << "Method : "
+              << request.getMethod()
+              << std::endl;
+
+    std::cout << "Path   : "
+              << request.getPath()
+              << std::endl;
+
+    std::cout << "Version: "
+              << request.getVersion()
+              << std::endl;
+
+    std::string filePath =getFilePath(request);
+
+    std::string page =readFile(filePath);
+
+    int statusCode = 200;
+    std::string statusText = "OK";
+
+    if (filePath == "public/404.html")
+    {
+        statusCode = 404;
+        statusText = "Not Found";
+    }
+
+    HttpResponse response(
+        statusCode,
+        statusText,
+        "text/html",
+        page
+    );
+
+    std::string httpResponse = response.build();
+
+    send(clientSocket,
+         httpResponse.c_str(),
+         httpResponse.length(),
+         0);
+
+    close(clientSocket);
+
+    std::cout << "Connection closed."
+              << std::endl;
+}
+
+std::string Server::readFile(const std::string& filePath)
+{
+    std::ifstream file(filePath);
+
+    if (!file.is_open())
+    {
+        return "";
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+
+    return buffer.str();
+}
+
+std::string Server::getFilePath(const HttpRequest& request)
+{
+    if (request.getPath() == "/")
+    {
+        return "public/index.html";
+    }
+
+    if (request.getPath() == "/about")
+    {
+        return "public/about.html";
+    }
+
+    return "public/404.html";
 }
