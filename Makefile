@@ -1,0 +1,12 @@
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -Wextra
+
+SRC = src/main.cpp src/server.cpp
+
+TARGET = server
+
+all:
+	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET)
+
+clean:
+	rm -f $(TARGET)
