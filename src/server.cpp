@@ -25,12 +25,13 @@ void Server::start()
 
     std::cout << "Socket created successfully. :D " <<std::endl;
 
-    sockaddr_in serverAddress{};
+    sockaddr_in serverAddress{}; //configuring server addr
 
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port =htons(port);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
 
+    //binding socket
     if (bind(serverSocket,reinterpret_cast<sockaddr*>(&serverAddress),sizeof(serverAddress))<0)
     {
         std::cerr << "Failed to bind socket. T^T " << std::endl;
@@ -41,4 +42,19 @@ void Server::start()
     std::cout << "Socket bound to port "
               << port
               << " successfully. " << std::endl;
+
+    if (listen(serverSocket,5)<0){
+        std::cerr << "Failed to listen. ¬_¬ " << std::endl;
+        close(serverSocket);
+        return;
+    }
+    std::cout << "Server is now listening on port "
+              << port
+              << std::endl;
+    std::cout << "Ctrl + C to stop server ;) "
+              << std::endl;
+
+    while(true){ //server's life support
+        pause();
+    }
 }
