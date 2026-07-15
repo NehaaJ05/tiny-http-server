@@ -10,6 +10,7 @@ public:
 private:
     int port;
     int serverSocket;
+    void acceptConnections();
 };
 
 #endif

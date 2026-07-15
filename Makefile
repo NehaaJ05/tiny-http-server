@@ -1,7 +1,10 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall -Wextra
 
-SRC = src/main.cpp src/server.cpp
+SRC = \
+src/main.cpp \
+src/server.cpp \
+src/response.cpp
 
 TARGET = server
 

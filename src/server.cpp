@@ -1,4 +1,5 @@
 #include "server.h"
+#include "response.h"
 #include <iostream>
 #include <cstring>
 #include <sys/socket.h>
@@ -51,10 +52,38 @@ void Server::start()
     std::cout << "Server is now listening on port "
               << port
               << std::endl;
-    std::cout << "Ctrl + C to stop server ;) "
-              << std::endl;
+    
+    acceptConnections();
+}
 
-    while(true){ //server's life support
-        pause();
+void Server::acceptConnections(){
+    while(true){
+        sockaddr_in clientAddress{};
+        socklen_t clientLength =sizeof(clientAddress);
+        int clientSocket = accept(serverSocket,reinterpret_cast<sockaddr*>(&clientAddress),&clientLength);
+        if (clientSocket <0){
+            std::cerr << "Failed to accept connection. （︶^︶）"
+                      << std::endl;
+            continue;
+        }
+        
+        std::cout << "Client connected from "
+                  << inet_ntoa(clientAddress.sin_addr)
+                  << ":"
+                  << ntohs(clientAddress.sin_port)
+                  << std::endl;
+        
+        HttpResponse response(
+            200,
+            "OK",
+            "text/plain",
+            "Hello from Tiny HTTP Server!"
+        );
+        std::string httpResponse = response.build();
+        send(clientSocket,httpResponse.c_str(),httpResponse.length(),0);
+        close(clientSocket);
+
+        std::cout << "Connection closed. Goodbye"
+                  << std::endl;
     }
 }
