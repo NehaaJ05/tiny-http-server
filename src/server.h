@@ -15,7 +15,6 @@ private:
     void acceptConnections();
     void handleClient(int clientSocket, const sockaddr_in& clientAddress);
     std::string readFile(const std::string& filePath);
-    std::string getFilePath(const HttpRequest& request);
 };
 
 #endif

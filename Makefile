@@ -5,7 +5,9 @@ SRC = \
 src/main.cpp \
 src/server.cpp \
 src/request.cpp \
-src/response.cpp
+src/response.cpp \
+src/router.cpp \
+src/mime.cpp
 
 TARGET = server
 

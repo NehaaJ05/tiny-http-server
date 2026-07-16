@@ -1,17 +1,21 @@
 #include "server.h"
 #include "response.h"
 #include "request.h"
+#include "router.h"
+#include "mime.h"
 
+#include <fstream>
+#include <sstream>
 #include <iostream>
 #include <cstring>
+#include <thread>
+#include <chrono>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 
-#include <fstream>
-#include <sstream>
 
 Server::Server(int port)
 {
@@ -24,6 +28,21 @@ void Server::start()
     std::cout << "Starting server... " << std::endl;
 
     serverSocket=socket(AF_INET, SOCK_STREAM, 0); //creating a TCP socket
+    int option = 1;
+
+    if (setsockopt(
+            serverSocket,
+            SOL_SOCKET,
+            SO_REUSEADDR,
+            &option,
+            sizeof(option)) < 0)
+    {
+        std::cerr << "Failed to configure socket options."
+                  << std::endl;
+
+        close(serverSocket);
+        return;
+    }
 
     if (serverSocket <0){
         std::cerr << "Failed to create socket. :( " <<std::endl;
@@ -72,7 +91,14 @@ void Server::acceptConnections(){
                       << std::endl;
             continue;
         }
-        handleClient(clientSocket, clientAddress);
+        std::thread clientThread(
+            &Server::handleClient,
+            this,
+            clientSocket,
+            clientAddress
+        );
+
+        clientThread.detach();
     }
 }
 
@@ -87,6 +113,10 @@ void Server::handleClient(int clientSocket,
 
     constexpr size_t BUFFER_SIZE = 4096;
 
+    //check if parallel with timer
+    std::this_thread::sleep_for(
+        std::chrono::seconds(5)
+    );
     char buffer[BUFFER_SIZE];
 
     ssize_t bytesReceived =
@@ -118,8 +148,10 @@ void Server::handleClient(int clientSocket,
     std::cout << "Version: "
               << request.getVersion()
               << std::endl;
-
-    std::string filePath =getFilePath(request);
+     
+     
+    Router router;
+    std::string filePath =router.getFilePath(request);
 
     std::string page =readFile(filePath);
 
@@ -132,10 +164,13 @@ void Server::handleClient(int clientSocket,
         statusText = "Not Found";
     }
 
+    std::string contentType =
+    Mime::getContentType(filePath);
+
     HttpResponse response(
         statusCode,
         statusText,
-        "text/html",
+        contentType,
         page
     );
 
@@ -165,19 +200,4 @@ std::string Server::readFile(const std::string& filePath)
     buffer << file.rdbuf();
 
     return buffer.str();
-}
-
-std::string Server::getFilePath(const HttpRequest& request)
-{
-    if (request.getPath() == "/")
-    {
-        return "public/index.html";
-    }
-
-    if (request.getPath() == "/about")
-    {
-        return "public/about.html";
-    }
-
-    return "public/404.html";
 }
