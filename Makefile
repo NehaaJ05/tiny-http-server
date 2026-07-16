@@ -7,7 +7,9 @@ src/server.cpp \
 src/request.cpp \
 src/response.cpp \
 src/router.cpp \
-src/mime.cpp
+src/mime.cpp \
+src/logger.cpp \
+src/stats.cpp
 
 TARGET = server
 

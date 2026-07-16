@@ -8,7 +8,8 @@ class Server
 public:
     Server(int port);
     void start();
-
+    void stop();
+    
 private:
     int port;
     int serverSocket;

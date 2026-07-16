@@ -3,94 +3,111 @@
 #include "request.h"
 #include "router.h"
 #include "mime.h"
+#include "logger.h"
+#include "stats.h"
 
 #include <fstream>
 #include <sstream>
 #include <iostream>
 #include <cstring>
 #include <thread>
-#include <chrono>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 
-
 Server::Server(int port)
 {
     this->port = port;
-    serverSocket=-1;
+    serverSocket = -1;
 }
 
 void Server::start()
 {
-    std::cout << "Starting server... " << std::endl;
+    Logger::log("Starting server...");
 
-    serverSocket=socket(AF_INET, SOCK_STREAM, 0); //creating a TCP socket
+    // Create TCP socket
+    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+    if (serverSocket < 0)
+    {
+        Logger::log("ERROR: Failed to create socket.");
+        return;
+    }
+
+    Logger::log("Socket created successfully.");
+
+    // Allow immediate port reuse
     int option = 1;
 
-    if (setsockopt(
-            serverSocket,
-            SOL_SOCKET,
-            SO_REUSEADDR,
-            &option,
-            sizeof(option)) < 0)
+    if (setsockopt(serverSocket,
+                   SOL_SOCKET,
+                   SO_REUSEADDR,
+                   &option,
+                   sizeof(option)) < 0)
     {
-        std::cerr << "Failed to configure socket options."
-                  << std::endl;
-
+        Logger::log("ERROR: Failed to configure socket options.");
         close(serverSocket);
         return;
     }
 
-    if (serverSocket <0){
-        std::cerr << "Failed to create socket. :( " <<std::endl;
-        return;
-    }
-
-    std::cout << "Socket created successfully. :D " <<std::endl;
-
-    sockaddr_in serverAddress{}; //configuring server addr
+    // Configuring server address
+    sockaddr_in serverAddress{};
 
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port =htons(port);
+    serverAddress.sin_port = htons(port);
     serverAddress.sin_addr.s_addr = INADDR_ANY;
 
-    //binding socket
-    if (bind(serverSocket,reinterpret_cast<sockaddr*>(&serverAddress),sizeof(serverAddress))<0)
+    // Bind socket
+    if (bind(serverSocket,
+             reinterpret_cast<sockaddr*>(&serverAddress),
+             sizeof(serverAddress)) < 0)
     {
-        std::cerr << "Failed to bind socket. T^T " << std::endl;
+        Logger::log("ERROR: Failed to bind socket.");
         close(serverSocket);
         return;
     }
 
-    std::cout << "Socket bound to port "
-              << port
-              << " successfully. " << std::endl;
+    Logger::log(
+        "Socket bound to port " +
+        std::to_string(port)
+    );
 
-    if (listen(serverSocket,5)<0){
-        std::cerr << "Failed to listen. ¬_¬ " << std::endl;
+    // Listen
+    if (listen(serverSocket, 5) < 0)
+    {
+        Logger::log("ERROR: Failed to listen.");
         close(serverSocket);
         return;
     }
-    std::cout << "Server is now listening on port "
-              << port
-              << std::endl;
-    
+
+    Logger::log(
+        "Server listening on port " +
+        std::to_string(port)
+    );
+
     acceptConnections();
 }
 
-void Server::acceptConnections(){
-    while(true){
+void Server::acceptConnections()
+{
+    while (true)
+    {
         sockaddr_in clientAddress{};
-        socklen_t clientLength =sizeof(clientAddress);
-        int clientSocket = accept(serverSocket,reinterpret_cast<sockaddr*>(&clientAddress),&clientLength);
-        if (clientSocket <0){
-            std::cerr << "Failed to accept connection. （︶^︶）"
-                      << std::endl;
+        socklen_t clientLength = sizeof(clientAddress);
+
+        int clientSocket =
+            accept(serverSocket,
+                   reinterpret_cast<sockaddr*>(&clientAddress),
+                   &clientLength);
+
+        if (clientSocket < 0)
+        {
+            Logger::log("ERROR: Failed to accept connection.");
             continue;
         }
+
         std::thread clientThread(
             &Server::handleClient,
             this,
@@ -102,21 +119,18 @@ void Server::acceptConnections(){
     }
 }
 
-void Server::handleClient(int clientSocket,
-                          const sockaddr_in& clientAddress)
+void Server::handleClient(int clientSocket, const sockaddr_in& clientAddress)
 {
-    std::cout << "Client connected from "
-              << inet_ntoa(clientAddress.sin_addr)
-              << ":"
-              << ntohs(clientAddress.sin_port)
-              << std::endl;
+    Stats::requestStarted();
+
+    Logger::log(
+        "Client connected from " +
+        std::string(inet_ntoa(clientAddress.sin_addr)) +
+        ":" +
+        std::to_string(ntohs(clientAddress.sin_port))
+    );
 
     constexpr size_t BUFFER_SIZE = 4096;
-
-    //check if parallel with timer
-    std::this_thread::sleep_for(
-        std::chrono::seconds(5)
-    );
     char buffer[BUFFER_SIZE];
 
     ssize_t bytesReceived =
@@ -127,6 +141,8 @@ void Server::handleClient(int clientSocket,
 
     if (bytesReceived <= 0)
     {
+        Logger::log("ERROR: Failed to receive request.");
+        Stats::requestFinished();
         close(clientSocket);
         return;
     }
@@ -135,25 +151,28 @@ void Server::handleClient(int clientSocket,
 
     HttpRequest request(buffer);
 
-    std::cout << "\n======= Incoming Request =======\n";
+    Logger::log(
+        request.getMethod() +
+        " " +
+        request.getPath() +
+        " " +
+        request.getVersion()
+    );
 
-    std::cout << "Method : "
-              << request.getMethod()
-              << std::endl;
-
-    std::cout << "Path   : "
-              << request.getPath()
-              << std::endl;
-
-    std::cout << "Version: "
-              << request.getVersion()
-              << std::endl;
-     
-     
     Router router;
-    std::string filePath =router.getFilePath(request);
 
-    std::string page =readFile(filePath);
+    std::string filePath = router.getFilePath(request);
+
+    std::string page;
+
+    if (filePath == "__stats__")
+    {
+        page = Stats::getJson();
+    }
+    else
+    {
+        page = readFile(filePath);
+    }
 
     int statusCode = 200;
     std::string statusText = "OK";
@@ -164,9 +183,18 @@ void Server::handleClient(int clientSocket,
         statusText = "Not Found";
     }
 
-    std::string contentType =
-    Mime::getContentType(filePath);
+    std::string contentType;
 
+    if (filePath == "__stats__")
+    {
+        contentType = "application/json";
+    }
+    else
+    {
+        contentType =
+            Mime::getContentType(filePath);
+    }
+    
     HttpResponse response(
         statusCode,
         statusText,
@@ -181,10 +209,15 @@ void Server::handleClient(int clientSocket,
          httpResponse.length(),
          0);
 
+    Logger::log(
+        "Response sent (" + std::to_string(statusCode) + ")"
+    );
+
+    Stats::requestFinished();
+
     close(clientSocket);
 
-    std::cout << "Connection closed."
-              << std::endl;
+    Logger::log("Connection closed.");
 }
 
 std::string Server::readFile(const std::string& filePath)
@@ -193,6 +226,7 @@ std::string Server::readFile(const std::string& filePath)
 
     if (!file.is_open())
     {
+        Logger::log("ERROR: Could not open file: " + filePath );
         return "";
     }
 
@@ -200,4 +234,14 @@ std::string Server::readFile(const std::string& filePath)
     buffer << file.rdbuf();
 
     return buffer.str();
+}
+
+void Server::stop()
+{
+    Logger::log("Server shutting down.");
+
+    if (serverSocket >= 0)
+    {
+        close(serverSocket);
+    }
 }

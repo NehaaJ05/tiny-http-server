@@ -11,6 +11,11 @@ std::string Router::getFilePath(const HttpRequest& request) const
     {
         return "public/about.html";
     }
+    
+        if (request.getPath() == "/stats")
+    {
+        return "__stats__";
+    }
 
     return "public/404.html";
 }
