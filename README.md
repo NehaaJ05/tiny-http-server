@@ -223,19 +223,6 @@ Run
 - Systems Programming
 - Linux Development
 
----
-
-## Future Improvements
-
-- Thread pool implementation
-- HTTP keep-alive support
-- Configuration file support
-- Request timeout handling
-- Better HTTP header parsing
-
----
-
-## Author
 
 **Nehaa J**
 
